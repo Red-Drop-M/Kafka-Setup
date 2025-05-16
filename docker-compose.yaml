@@ -1,0 +1,48 @@
+services:
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: kafka-broker
+    hostname: kafka-broker
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:  
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      # Fix listeners to bind to all interfaces
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-broker:9092
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka-broker:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_NUM_PARTITIONS=3
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=1
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=1
+    networks:
+      - shared-kafka-net
+    restart: always
+
+  kafka-setup:
+    image: bitnami/kafka:latest
+    depends_on:
+      - kafka
+    restart: on-failure
+    networks:
+      - shared-kafka-net
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      "
+      echo 'Waiting for Kafka to be ready...'
+      sleep 20
+      echo 'Creating topics...'
+      kafka-topics.sh --create --if-not-exists --bootstrap-server kafka-broker:9092 --topic blood-request-created --partitions 3 --replication-factor 1
+      kafka-topics.sh --create --if-not-exists --bootstrap-server kafka-broker:9092 --topic donors-pledges --partitions 3 --replication-factor 1
+      echo 'Topics created:'
+      kafka-topics.sh --list --bootstrap-server kafka-broker:9092
+      "
+
+networks:
+  shared-kafka-net:
+    name: kafka-net
+    driver: bridge
